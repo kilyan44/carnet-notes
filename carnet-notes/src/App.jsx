@@ -15,7 +15,7 @@ async function loadFromSupabase() {
 }
 
 async function saveToSupabase(data) {
-  await fetch(`${SUPABASE_URL}/rest/v1/notes?limit=1`, {
+  await fetch(`${SUPABASE_URL}/rest/v1/notes?id=not.is.null`, {
     method: "PATCH",
     headers: {
       apikey: SUPABASE_KEY,
