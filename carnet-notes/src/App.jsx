@@ -15,7 +15,7 @@ async function loadFromSupabase() {
 }
 
 async function saveToSupabase(data) {
-  await fetch(`${SUPABASE_URL}/rest/v1/notes`, {
+  await fetch(`${SUPABASE_URL}/rest/v1/notes?limit=1`, {
     method: "PATCH",
     headers: {
       apikey: SUPABASE_KEY,
@@ -23,7 +23,7 @@ async function saveToSupabase(data) {
       "Content-Type": "application/json",
       Prefer: "return=minimal",
     },
-    body: JSON.stringify({ data }),
+    body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
   });
 }
 
