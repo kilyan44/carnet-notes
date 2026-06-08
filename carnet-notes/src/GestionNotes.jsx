@@ -1,4 +1,31 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+
+const SUPABASE_URL = "https://bjdnxygflefkbblalzsr.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqZG54eWdmbGVma2JibGFsenNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MDE3OTEsImV4cCI6MjA5NjQ3Nzc5MX0.QDWD2CXNCKHF4IkNS3AyDOS8FMr0gNjDs0rDDABCRYw";
+
+async function loadFromSupabase() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&limit=1`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY },
+  });
+  const rows = await res.json();
+  if (rows && rows.length > 0 && rows[0].data && rows[0].data.semesters) {
+    return rows[0].data;
+  }
+  return null;
+}
+
+async function saveToSupabase(data) {
+  await fetch(`${SUPABASE_URL}/rest/v1/notes`, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: "Bearer " + SUPABASE_KEY,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({ data }),
+  });
+}
 
 function clamp(val) {
   const n = parseFloat(val);
@@ -64,55 +91,37 @@ function SubjectCard({ subject, onChange, onDelete }) {
     const val = ["cc1","cc2","cc3","cc4"].includes(key) ? clamp(raw) : raw;
     onChange({ ...subject, [key]: val });
   };
-
   const cols = [
     { k: "cc1", lbl: "CC1", v: subject.cc1, pk: "p1", pv: subject.p1, ap: v1, star: false },
     { k: "cc2", lbl: "CC2", v: subject.cc2, pk: "p2", pv: subject.p2, ap: v2, star: false },
     { k: "cc3", lbl: "CC3", v: subject.cc3, pk: "p3", pv: subject.p3, ap: v3, star: false },
     { k: "cc4", lbl: "CC4", v: subject.cc4, pk: "p4", pv: subject.p4, ap: v4, star: true },
   ];
-
   return (
     <div style={{ background: "#fff", border: "1.5px solid " + border, borderRadius: 16, padding: "16px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <input
-          type="text"
-          placeholder="Nom de la matière…"
-          value={subject.name}
+        <input type="text" placeholder="Nom de la matière…" value={subject.name}
           onChange={(e) => upd("name", e.target.value)}
-          style={{ flex: 1, minWidth: 120, background: "transparent", border: "none", borderBottom: "1.5px solid #e2e8f0", fontSize: 15, fontWeight: 500, padding: "4px 2px", outline: "none", color: "#0f172a" }}
-        />
-        <span style={{ fontSize: 13, fontWeight: 700, padding: "4px 12px", borderRadius: 24, background: nb(avg).bg, color: nc(avg), border: "1px solid " + nb(avg).border }}>
-          {fmt(avg)} / 20
-        </span>
-        <button
-          onClick={onDelete}
-          style={{ background: "#fff5f5", border: "1.5px solid #fecdd3", borderRadius: 8, color: "#e11d48", cursor: "pointer", padding: "5px 10px", fontSize: 13 }}
-        >✕</button>
+          style={{ flex: 1, minWidth: 120, background: "transparent", border: "none", borderBottom: "1.5px solid #e2e8f0", fontSize: 15, fontWeight: 500, padding: "4px 2px", outline: "none", color: "#0f172a" }} />
+        <span style={{ fontSize: 13, fontWeight: 700, padding: "4px 12px", borderRadius: 24, background: nb(avg).bg, color: nc(avg), border: "1px solid " + nb(avg).border }}>{fmt(avg)} / 20</span>
+        <button onClick={onDelete} style={{ background: "#fff5f5", border: "1.5px solid #fecdd3", borderRadius: 8, color: "#e11d48", cursor: "pointer", padding: "5px 10px", fontSize: 13 }}>✕</button>
       </div>
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
         {cols.map(function(col) {
           var k = col.k, lbl = col.lbl, v = col.v, pk = col.pk, pv = col.pv, ap = col.ap, star = col.star;
           var replaced = !star && isRep(v, ap);
           return (
             <div key={k} style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "center", padding: "10px 4px", background: star ? "#eef2ff" : "#f8fafc", borderRadius: 12, border: "1.5px solid " + (star ? "#c7d2fe" : "#e2e8f0"), minWidth: 0, overflow: "hidden" }}>
-              <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, color: star ? "#4f46e5" : "#64748b", whiteSpace: "nowrap" }}>
-                {star ? "★ CC4" : lbl}
-              </p>
-              <input
-                type="number" min={0} max={20} step={0.25} value={v}
+              <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, color: star ? "#4f46e5" : "#64748b", whiteSpace: "nowrap" }}>{star ? "★ CC4" : lbl}</p>
+              <input type="number" min={0} max={20} step={0.25} value={v}
                 onChange={(e) => upd(k, e.target.value)}
                 onBlur={(e) => upd(k, clamp(e.target.value))}
                 placeholder="—"
-                style={{ width: "100%", padding: "6px 2px", border: "1.5px solid " + (replaced ? "#fcd34d" : star ? "#a5b4fc" : "#e2e8f0"), borderRadius: 8, background: replaced ? "#fffbeb" : "#fff", color: replaced ? "#d97706" : "#0f172a", fontSize: 13, fontWeight: 700, textAlign: "center", outline: "none" }}
-              />
+                style={{ width: "100%", padding: "6px 2px", border: "1.5px solid " + (replaced ? "#fcd34d" : star ? "#a5b4fc" : "#e2e8f0"), borderRadius: 8, background: replaced ? "#fffbeb" : "#fff", color: replaced ? "#d97706" : "#0f172a", fontSize: 13, fontWeight: 700, textAlign: "center", outline: "none" }} />
               <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <input
-                  type="number" min={0} max={100} step={1} value={pv}
+                <input type="number" min={0} max={100} step={1} value={pv}
                   onChange={(e) => upd(pk, e.target.value)}
-                  style={{ width: 38, padding: "4px 2px", border: "1.5px solid #e2e8f0", borderRadius: 6, background: "#f8fafc", color: "#64748b", fontSize: 11, fontWeight: 500, textAlign: "center", outline: "none" }}
-                />
+                  style={{ width: 38, padding: "4px 2px", border: "1.5px solid #e2e8f0", borderRadius: 6, background: "#f8fafc", color: "#64748b", fontSize: 11, fontWeight: 500, textAlign: "center", outline: "none" }} />
                 <span style={{ fontSize: 10, color: "#94a3b8" }}>%</span>
               </div>
               {replaced && (
@@ -125,9 +134,7 @@ function SubjectCard({ subject, onChange, onDelete }) {
         })}
       </div>
       {totalPct !== 100 && (
-        <div style={{ marginTop: 10, fontSize: 12, color: "#e11d48", fontWeight: 500 }}>
-          ⚠ Total des poids : {totalPct}% (doit être 100%)
-        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: "#e11d48", fontWeight: 500 }}>⚠ Total des poids : {totalPct}% (doit être 100%)</div>
       )}
     </div>
   );
@@ -141,14 +148,12 @@ function SubjectRowView({ subject }) {
   const [v1, v2, v3, v4] = applyCC4Rule(subject.cc1, subject.cc2, subject.cc3, subject.cc4);
   const isRep = (orig, ap) => orig !== "" && parseFloat(orig) !== ap;
   const bar = avg !== null ? (avg / 20) * 100 : 0;
-
   const ccCols = [
     { lbl: "CC1", v: subject.cc1, ap: v1, pv: subject.p1, star: false },
     { lbl: "CC2", v: subject.cc2, ap: v2, pv: subject.p2, star: false },
     { lbl: "CC3", v: subject.cc3, ap: v3, pv: subject.p3, star: false },
     { lbl: "CC4", v: subject.cc4, ap: v4, pv: subject.p4, star: true },
   ];
-
   return (
     <div style={{ background: "#fff", border: "1.5px solid " + border, borderRadius: 18, padding: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
@@ -171,11 +176,9 @@ function SubjectRowView({ subject }) {
           </div>
         </div>
       </div>
-
       <div style={{ background: "#f1f5f9", borderRadius: 20, height: 5, marginBottom: 12, overflow: "hidden" }}>
         <div style={{ width: bar + "%", height: "100%", background: "linear-gradient(90deg, " + vc + "88, " + vc + ")", borderRadius: 20, transition: "width 0.4s ease" }} />
       </div>
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6 }}>
         {ccCols.map(function(col) {
           var lbl = col.lbl, v = col.v, ap = col.ap, pv = col.pv, star = col.star;
@@ -183,9 +186,7 @@ function SubjectRowView({ subject }) {
           var displayVal = ap != null ? ap.toFixed(2) : "0.00";
           return (
             <div key={lbl} style={{ background: star ? "#eef2ff" : "#f8fafc", borderRadius: 10, padding: "10px 4px", textAlign: "center", border: "1.5px solid " + (star ? "#c7d2fe" : rep ? "#fde68a" : "#e2e8f0"), minWidth: 0, overflow: "hidden" }}>
-              <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5, fontWeight: 700, color: star ? "#4f46e5" : "#64748b", whiteSpace: "nowrap" }}>
-                {star ? "★ CC4" : lbl}
-              </p>
+              <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5, fontWeight: 700, color: star ? "#4f46e5" : "#64748b", whiteSpace: "nowrap" }}>{star ? "★ CC4" : lbl}</p>
               <p style={{ fontSize: 17, fontWeight: 800, color: rep ? "#d97706" : star ? "#4f46e5" : v === "" ? "#cbd5e1" : "#1e293b", lineHeight: 1 }}>
                 {v === "" && !star ? "—" : displayVal}
               </p>
@@ -205,21 +206,65 @@ function SubjectRowView({ subject }) {
 
 export default function App() {
   const [semesters, setSemesters] = useState([newSemester("Semestre 1")]);
-  const [activeId, setActiveId] = useState(function() { return semesters[0].id; });
+  const [activeId, setActiveId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [newSemName, setNewSemName] = useState("");
   const [showAddSem, setShowAddSem] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  const saveTimer = useRef(null);
+
+  // Chargement initial depuis Supabase
+  useEffect(() => {
+    loadFromSupabase().then((data) => {
+      if (data && data.semesters && data.semesters.length > 0) {
+        setSemesters(data.semesters);
+        setActiveId(data.semesters[0].id);
+        // Mettre à jour le compteur d'ID pour éviter les collisions
+        const maxId = data.semesters.reduce((max, sem) => {
+          const semMax = sem.subjects.reduce((m, s) => Math.max(m, s.id || 0), sem.id || 0);
+          return Math.max(max, semMax);
+        }, 0);
+        _nid = Math.max(_nid, maxId + 1);
+      } else {
+        const s = newSemester("Semestre 1");
+        setSemesters([s]);
+        setActiveId(s.id);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  // Sauvegarde automatique avec debounce (1.5s après la dernière modif)
+  const scheduleSave = useCallback((newSemesters) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSaving(true);
+    saveTimer.current = setTimeout(async () => {
+      await saveToSupabase({ semesters: newSemesters });
+      setSaving(false);
+      setLastSaved(new Date());
+    }, 1500);
+  }, []);
 
   const activeSem = semesters.find((s) => s.id === activeId) || semesters[0];
 
   const updateSemester = useCallback((updated) => {
-    setSemesters((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-  }, []);
+    setSemesters((prev) => {
+      const next = prev.map((s) => (s.id === updated.id ? updated : s));
+      scheduleSave(next);
+      return next;
+    });
+  }, [scheduleSave]);
 
   const addSemester = () => {
     if (!newSemName.trim()) return;
     const s = newSemester(newSemName.trim());
-    setSemesters((prev) => [...prev, s]);
+    setSemesters((prev) => {
+      const next = [...prev, s];
+      scheduleSave(next);
+      return next;
+    });
     setActiveId(s.id);
     setNewSemName("");
     setShowAddSem(false);
@@ -227,9 +272,12 @@ export default function App() {
   };
 
   const deleteSemester = (id) => {
-    const next = semesters.filter((s) => s.id !== id);
-    setSemesters(next);
-    if (activeId === id) setActiveId(next[0] ? next[0].id : null);
+    setSemesters((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      scheduleSave(next);
+      return next;
+    });
+    if (activeId === id) setActiveId(semesters.find((s) => s.id !== id)?.id ?? null);
   };
 
   const globalAvg = (function() {
@@ -240,6 +288,16 @@ export default function App() {
 
   const semAvg = activeSem ? computeSemAvg(activeSem.subjects) : null;
 
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+        <div style={{ width: 48, height: 48, border: "4px solid #e2e8f0", borderTop: "4px solid #4f46e5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <p style={{ color: "#94a3b8", fontSize: 14 }}>Chargement des notes…</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <style>{`
@@ -247,12 +305,21 @@ export default function App() {
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
         input[type=number] { -moz-appearance: textfield; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
+      {/* Header */}
       <div style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1d4ed8 100%)", padding: "24px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, boxShadow: "0 4px 24px rgba(30,27,75,0.25)" }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>📚 Carnet de Notes</h1>
-          <p style={{ fontSize: 12, color: "#a5b4fc", marginTop: 4 }}>Suivi des moyennes • Règle CC4</p>
+          <p style={{ fontSize: 12, color: "#a5b4fc", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+            Suivi des moyennes • Règle CC4
+            {saving && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#818cf8" }}>
+              <span style={{ width: 10, height: 10, border: "2px solid #818cf8", borderTop: "2px solid transparent", borderRadius: "50%", display: "inline-block", animation: "spin 0.8s linear infinite" }}></span>
+              Sauvegarde…
+            </span>}
+            {!saving && lastSaved && <span style={{ color: "#6ee7b7" }}>✓ Sauvegardé</span>}
+          </p>
         </div>
         <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: "12px 20px", border: "1px solid rgba(255,255,255,0.2)", textAlign: "center" }}>
           <p style={{ fontSize: 10, color: "#a5b4fc", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>Moyenne générale</p>
@@ -263,6 +330,7 @@ export default function App() {
         </div>
       </div>
 
+      {/* Onglets semestres */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "0 16px", display: "flex", alignItems: "center", overflowX: "auto", gap: 0 }}>
         {semesters.map((s) => {
           const a = computeSemAvg(s.subjects);
@@ -290,28 +358,26 @@ export default function App() {
                 onChange={(e) => setNewSemName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addSemester(); }}
                 placeholder="Nom…"
-                style={{ border: "1.5px solid #a5b4fc", borderRadius: 8, fontSize: 13, padding: "5px 8px", outline: "none", width: 120 }}
-              />
+                style={{ border: "1.5px solid #a5b4fc", borderRadius: 8, fontSize: 13, padding: "5px 8px", outline: "none", width: 120 }} />
               <button onClick={addSemester} style={{ background: "#4f46e5", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 10px", cursor: "pointer" }}>OK</button>
               <button onClick={() => { setShowAddSem(false); setNewSemName(""); }} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 16 }}>✕</button>
             </div>
           ) : (
-            <button onClick={() => setShowAddSem(true)} style={{ background: "transparent", border: "1.5px dashed #a5b4fc", borderRadius: 8, color: "#4f46e5", fontSize: 12, fontWeight: 500, padding: "5px 12px", cursor: "pointer" }}>
-              + Semestre
-            </button>
+            <button onClick={() => setShowAddSem(true)} style={{ background: "transparent", border: "1.5px dashed #a5b4fc", borderRadius: 8, color: "#4f46e5", fontSize: 12, fontWeight: 500, padding: "5px 12px", cursor: "pointer" }}>+ Semestre</button>
           )}
         </div>
       </div>
 
+      {/* Contenu */}
       <div style={{ padding: "20px 16px 100px", maxWidth: 860, margin: "0 auto" }}>
 
-        <button
-          onClick={() => setEditing((e) => !e)}
-          style={{ position: "fixed", bottom: 28, right: 20, width: 52, height: 52, borderRadius: "50%", background: editing ? "linear-gradient(135deg,#0f172a,#1e293b)" : "linear-gradient(135deg,#4f46e5,#7c3aed)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", boxShadow: "0 6px 20px rgba(79,70,229,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
-        >
+        {/* Bouton flottant */}
+        <button onClick={() => setEditing((e) => !e)}
+          style={{ position: "fixed", bottom: 28, right: 20, width: 52, height: 52, borderRadius: "50%", background: editing ? "linear-gradient(135deg,#0f172a,#1e293b)" : "linear-gradient(135deg,#4f46e5,#7c3aed)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", boxShadow: "0 6px 20px rgba(79,70,229,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
           {editing ? "✕" : "✏"}
         </button>
 
+        {/* Vue semestre */}
         {!editing && activeSem && (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "12px 16px", marginBottom: 16, background: "#fff", borderRadius: 14, border: "1px solid #e2e8f0", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
@@ -329,7 +395,6 @@ export default function App() {
                 Appuie sur <strong style={{ color: "#4f46e5" }}>✏</strong> pour modifier
               </div>
             </div>
-
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {activeSem.subjects.filter((s) => s.name || computeSubjectAvg(s) !== null).map((s) => (
                 <SubjectRowView key={s.id} subject={s} />
@@ -341,7 +406,6 @@ export default function App() {
                 </div>
               )}
             </div>
-
             {semesters.length > 1 && (
               <div style={{ marginTop: 32 }}>
                 <h2 style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>Tous les semestres</h2>
@@ -366,6 +430,7 @@ export default function App() {
           </div>
         )}
 
+        {/* Mode édition */}
         {editing && activeSem && (
           <div>
             <div style={{ background: "linear-gradient(135deg,#eef2ff,#f5f3ff)", border: "1.5px solid #c7d2fe", borderRadius: 14, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -378,12 +443,9 @@ export default function App() {
                 <span style={{ fontSize: 13, color: "#94a3b8" }}>/20</span>
               </div>
             </div>
-
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {activeSem.subjects.map((s, idx) => (
-                <SubjectCard
-                  key={s.id}
-                  subject={s}
+                <SubjectCard key={s.id} subject={s}
                   onChange={(updated) => {
                     const subjects = activeSem.subjects.map((x, i) => (i === idx ? updated : x));
                     updateSemester({ ...activeSem, subjects });
@@ -391,15 +453,13 @@ export default function App() {
                   onDelete={() => {
                     const subjects = activeSem.subjects.filter((_, i) => i !== idx);
                     updateSemester({ ...activeSem, subjects });
-                  }}
-                />
+                  }} />
               ))}
             </div>
-
-            <button
-              onClick={() => updateSemester({ ...activeSem, subjects: [...activeSem.subjects, newSubject()] })}
-              style={{ marginTop: 12, width: "100%", padding: 12, background: "#fff", border: "1.5px dashed #a5b4fc", borderRadius: 14, color: "#4f46e5", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-            >+ Ajouter une matière</button>
+            <button onClick={() => updateSemester({ ...activeSem, subjects: [...activeSem.subjects, newSubject()] })}
+              style={{ marginTop: 12, width: "100%", padding: 12, background: "#fff", border: "1.5px dashed #a5b4fc", borderRadius: 14, color: "#4f46e5", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              + Ajouter une matière
+            </button>
           </div>
         )}
       </div>
