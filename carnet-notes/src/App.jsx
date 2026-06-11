@@ -54,10 +54,39 @@ function computeSubjectAvg(s) {
   return ws.reduce((a, x) => a + x.v * x.p, 0) / tp;
 }
 
+// Moyenne pondérée par ECTS
 function computeSemAvg(subjects) {
-  const avgs = subjects.map(computeSubjectAvg).filter((x) => x !== null);
-  if (!avgs.length) return null;
-  return avgs.reduce((a, b) => a + b, 0) / avgs.length;
+  const entries = subjects
+    .map((s) => ({ avg: computeSubjectAvg(s), ects: parseFloat(s.ects) || 0 }))
+    .filter((x) => x.avg !== null && x.ects > 0);
+  if (!entries.length) {
+    // fallback sans ECTS
+    const avgs = subjects.map((s) => computeSubjectAvg(s)).filter((x) => x !== null);
+    if (!avgs.length) return null;
+    return avgs.reduce((a, b) => a + b, 0) / avgs.length;
+  }
+  const totalEcts = entries.reduce((a, x) => a + x.ects, 0);
+  return entries.reduce((a, x) => a + x.avg * x.ects, 0) / totalEcts;
+}
+
+// Total ECTS validés (avg >= 10) pour tous les semestres
+function computeTotalEcts(semesters) {
+  return semesters.reduce((total, sem) => {
+    return total + sem.subjects.reduce((t, s) => {
+      const avg = computeSubjectAvg(s);
+      const ects = parseFloat(s.ects) || 0;
+      return t + (avg !== null && avg >= 10 ? ects : 0);
+    }, 0);
+  }, 0);
+}
+
+// Total ECTS inscrits (toutes matières avec ECTS renseignés)
+function computeTotalEctsInscrit(semesters) {
+  return semesters.reduce((total, sem) => {
+    return total + sem.subjects.reduce((t, s) => {
+      return t + (parseFloat(s.ects) || 0);
+    }, 0);
+  }, 0);
 }
 
 function fmt(v) { return v == null ? "—" : v.toFixed(2); }
@@ -78,7 +107,7 @@ function nb(v) {
 
 let _nid = 20;
 const newId = () => ++_nid;
-const newSubject = () => ({ id: newId(), name: "", cc1: "", cc2: "", cc3: "", cc4: "", p1: "25", p2: "25", p3: "25", p4: "25" });
+const newSubject = () => ({ id: newId(), name: "", cc1: "", cc2: "", cc3: "", cc4: "", p1: "25", p2: "25", p3: "25", p4: "25", ects: "3" });
 const newSemester = (name) => ({ id: newId(), name: name || "", subjects: [newSubject()] });
 
 function SubjectCard({ subject, onChange, onDelete }) {
@@ -103,6 +132,16 @@ function SubjectCard({ subject, onChange, onDelete }) {
         <input type="text" placeholder="Nom de la matière…" value={subject.name}
           onChange={(e) => upd("name", e.target.value)}
           style={{ flex: 1, minWidth: 120, background: "transparent", border: "none", borderBottom: "1.5px solid #e2e8f0", fontSize: 15, fontWeight: 500, padding: "4px 2px", outline: "none", color: "#0f172a" }} />
+        {/* ECTS input */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 8, padding: "4px 8px" }}>
+          <input
+            type="number" min={1} max={12} step={1}
+            value={subject.ects ?? "3"}
+            onChange={(e) => upd("ects", e.target.value)}
+            style={{ width: 28, background: "transparent", border: "none", fontSize: 13, fontWeight: 700, color: "#059669", textAlign: "center", outline: "none" }}
+          />
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#059669", whiteSpace: "nowrap" }}>ECTS</span>
+        </div>
         <span style={{ fontSize: 13, fontWeight: 700, padding: "4px 12px", borderRadius: 24, background: nb(avg).bg, color: nc(avg), border: "1px solid " + nb(avg).border }}>{fmt(avg)} / 20</span>
         <button onClick={onDelete} style={{ background: "#fff5f5", border: "1.5px solid #fecdd3", borderRadius: 8, color: "#e11d48", cursor: "pointer", padding: "5px 10px", fontSize: 13 }}>✕</button>
       </div>
@@ -148,6 +187,8 @@ function SubjectRowView({ subject }) {
   const [v1, v2, v3, v4] = applyCC4Rule(subject.cc1, subject.cc2, subject.cc3, subject.cc4);
   const isRep = (orig, ap) => orig !== "" && parseFloat(orig) !== ap;
   const bar = avg !== null ? (avg / 20) * 100 : 0;
+  const ects = parseFloat(subject.ects) || 0;
+  const ectsValidated = validated && ects > 0;
   const ccCols = [
     { lbl: "CC1", v: subject.cc1, ap: v1, pv: subject.p1, star: false },
     { lbl: "CC2", v: subject.cc2, ap: v2, pv: subject.p2, star: false },
@@ -162,6 +203,17 @@ function SubjectRowView({ subject }) {
           <p style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
             {subject.name || <em style={{ color: "#94a3b8", fontWeight: 400 }}>Sans nom</em>}
           </p>
+          {/* Badge ECTS */}
+          {ects > 0 && (
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+              background: ectsValidated ? "#f0fdf4" : avg === null ? "#f8fafc" : "#fff1f2",
+              color: ectsValidated ? "#059669" : avg === null ? "#94a3b8" : "#e11d48",
+              border: "1.5px solid " + (ectsValidated ? "#86efac" : avg === null ? "#e2e8f0" : "#fda4af"),
+            }}>
+              {ectsValidated ? "✓" : avg === null ? "" : "✗"} {ects} ECTS
+            </span>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div>
@@ -215,13 +267,11 @@ export default function App() {
   const [lastSaved, setLastSaved] = useState(null);
   const saveTimer = useRef(null);
 
-  // Chargement initial depuis Supabase
   useEffect(() => {
     loadFromSupabase().then((data) => {
       if (data && data.semesters && data.semesters.length > 0) {
         setSemesters(data.semesters);
         setActiveId(data.semesters[0].id);
-        // Mettre à jour le compteur d'ID pour éviter les collisions
         const maxId = data.semesters.reduce((max, sem) => {
           const semMax = sem.subjects.reduce((m, s) => Math.max(m, s.id || 0), sem.id || 0);
           return Math.max(max, semMax);
@@ -236,7 +286,6 @@ export default function App() {
     }).catch(() => setLoading(false));
   }, []);
 
-  // Sauvegarde automatique avec debounce (1.5s après la dernière modif)
   const scheduleSave = useCallback((newSemesters) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaving(true);
@@ -280,13 +329,25 @@ export default function App() {
     if (activeId === id) setActiveId(semesters.find((s) => s.id !== id)?.id ?? null);
   };
 
+  // Moyenne générale pondérée par ECTS sur tous les semestres
   const globalAvg = (function() {
-    const avgs = semesters.map((s) => computeSemAvg(s.subjects)).filter((x) => x !== null);
-    if (!avgs.length) return null;
-    return avgs.reduce((a, b) => a + b, 0) / avgs.length;
+    const entries = semesters.flatMap((sem) =>
+      sem.subjects
+        .map((s) => ({ avg: computeSubjectAvg(s), ects: parseFloat(s.ects) || 0 }))
+        .filter((x) => x.avg !== null && x.ects > 0)
+    );
+    if (!entries.length) {
+      const avgs = semesters.flatMap((sem) => sem.subjects.map(computeSubjectAvg).filter((x) => x !== null));
+      if (!avgs.length) return null;
+      return avgs.reduce((a, b) => a + b, 0) / avgs.length;
+    }
+    const totalEcts = entries.reduce((a, x) => a + x.ects, 0);
+    return entries.reduce((a, x) => a + x.avg * x.ects, 0) / totalEcts;
   })();
 
   const semAvg = activeSem ? computeSemAvg(activeSem.subjects) : null;
+  const totalEctsValidated = computeTotalEcts(semesters);
+  const totalEctsInscrit = computeTotalEctsInscrit(semesters);
 
   if (loading) {
     return (
@@ -321,11 +382,38 @@ export default function App() {
             {!saving && lastSaved && <span style={{ color: "#6ee7b7" }}>✓ Sauvegardé</span>}
           </p>
         </div>
-        <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: "12px 20px", border: "1px solid rgba(255,255,255,0.2)", textAlign: "center" }}>
-          <p style={{ fontSize: 10, color: "#a5b4fc", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>Moyenne générale</p>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 3, justifyContent: "center" }}>
-            <span style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: globalAvg == null ? "#a5b4fc" : globalAvg >= 10 ? "#6ee7b7" : "#fca5a5" }}>{fmt(globalAvg)}</span>
-            <span style={{ fontSize: 14, color: "#a5b4fc" }}>/20</span>
+
+        {/* Stats header droite */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {/* ECTS validés */}
+          <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: "12px 16px", border: "1px solid rgba(255,255,255,0.2)", textAlign: "center", minWidth: 100 }}>
+            <p style={{ fontSize: 10, color: "#a5b4fc", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>ECTS validés</p>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 2, justifyContent: "center" }}>
+              <span style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: totalEctsValidated >= 60 ? "#6ee7b7" : totalEctsValidated > 0 ? "#fbbf24" : "#a5b4fc" }}>
+                {totalEctsValidated}
+              </span>
+              <span style={{ fontSize: 13, color: "#a5b4fc" }}>/180</span>
+            </div>
+            {/* Barre de progression */}
+            <div style={{ marginTop: 6, background: "rgba(255,255,255,0.15)", borderRadius: 10, height: 4, overflow: "hidden", width: "100%" }}>
+              <div style={{
+                width: Math.min((totalEctsValidated / 180) * 100, 100) + "%",
+                height: "100%",
+                background: totalEctsValidated >= 60 ? "#6ee7b7" : "#fbbf24",
+                borderRadius: 10,
+                transition: "width 0.4s ease"
+              }} />
+            </div>
+          </div>
+
+          {/* Moyenne générale */}
+          <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: "12px 20px", border: "1px solid rgba(255,255,255,0.2)", textAlign: "center" }}>
+            <p style={{ fontSize: 10, color: "#a5b4fc", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>Moyenne générale</p>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 3, justifyContent: "center" }}>
+              <span style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: globalAvg == null ? "#a5b4fc" : globalAvg >= 10 ? "#6ee7b7" : "#fca5a5" }}>{fmt(globalAvg)}</span>
+              <span style={{ fontSize: 14, color: "#a5b4fc" }}>/20</span>
+            </div>
+            <p style={{ fontSize: 10, color: "#818cf8", marginTop: 3 }}>pondérée ECTS</p>
           </div>
         </div>
       </div>
@@ -380,7 +468,7 @@ export default function App() {
         {/* Vue semestre */}
         {!editing && activeSem && (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "12px 16px", marginBottom: 16, background: "#fff", borderRadius: 14, border: "1px solid #e2e8f0", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "12px 16px", marginBottom: 16, background: "#fff", borderRadius: 14, border: "1px solid #e2e8f0", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", flexWrap: "wrap" }}>
               <div>
                 <p style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2, fontWeight: 600 }}>Moy. semestre</p>
                 <span style={{ fontSize: 20, fontWeight: 700, color: nc(semAvg) }}>{fmt(semAvg)}</span>
@@ -390,6 +478,14 @@ export default function App() {
               <div>
                 <p style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2, fontWeight: 600 }}>Matières</p>
                 <span style={{ fontSize: 20, fontWeight: 700, color: "#334155" }}>{activeSem.subjects.filter((s) => s.name).length}</span>
+              </div>
+              <div style={{ width: 1, height: 32, background: "#e2e8f0" }} />
+              <div>
+                <p style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2, fontWeight: 600 }}>ECTS ce sem.</p>
+                <span style={{ fontSize: 20, fontWeight: 700, color: "#059669" }}>
+                  {computeTotalEcts([activeSem])}
+                </span>
+                <span style={{ fontSize: 12, color: "#94a3b8" }}> / {activeSem.subjects.reduce((t, s) => t + (parseFloat(s.ects) || 0), 0)}</span>
               </div>
               <div style={{ marginLeft: "auto", fontSize: 11, color: "#94a3b8" }}>
                 Appuie sur <strong style={{ color: "#4f46e5" }}>✏</strong> pour modifier
@@ -412,14 +508,19 @@ export default function App() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {semesters.map((s) => {
                     const a = computeSemAvg(s.subjects);
+                    const ects = computeTotalEcts([s]);
+                    const ectsTotal = s.subjects.reduce((t, sub) => t + (parseFloat(sub.ects) || 0), 0);
                     const isActive = s.id === activeId;
                     return (
                       <div key={s.id} onClick={() => setActiveId(s.id)}
                         style={{ background: isActive ? "#eef2ff" : "#fff", border: "1.5px solid " + (isActive ? "#a5b4fc" : "#e2e8f0"), borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
                         <span style={{ fontSize: 14, color: isActive ? "#4f46e5" : "#334155", fontWeight: isActive ? 700 : 500 }}>{s.name}</span>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                          <span style={{ fontSize: 20, fontWeight: 800, color: nc(a) }}>{fmt(a)}</span>
-                          <span style={{ fontSize: 12, color: "#94a3b8" }}>/20</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <span style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>{ects}/{ectsTotal} ECTS</span>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                            <span style={{ fontSize: 20, fontWeight: 800, color: nc(a) }}>{fmt(a)}</span>
+                            <span style={{ fontSize: 12, color: "#94a3b8" }}>/20</span>
+                          </div>
                         </div>
                       </div>
                     );
@@ -436,7 +537,7 @@ export default function App() {
             <div style={{ background: "linear-gradient(135deg,#eef2ff,#f5f3ff)", border: "1.5px solid #c7d2fe", borderRadius: 14, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <p style={{ fontSize: 12, color: "#6366f1", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>✏ {activeSem.name}</p>
-                <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Notes max 20 · ✕ pour revenir à la vue</p>
+                <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Notes max 20 · Renseigne les ECTS de chaque matière · ✕ pour revenir à la vue</p>
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
                 <span style={{ fontSize: 26, fontWeight: 800, color: nc(semAvg) }}>{fmt(semAvg)}</span>
