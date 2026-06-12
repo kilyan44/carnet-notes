@@ -105,9 +105,62 @@ function nb(v) {
   return { bg: "#fff1f2", border: "#fda4af" };
 }
 
+// Programme officiel de la Licence d'Informatique (180 ECTS)
+const CURRICULUM = [
+  // Maths : 4 UE x 6 ECTS = 24
+  { id: "math1-al", name: "Math1.AL", category: "Mathématiques", ects: 6 },
+  { id: "math1-bases2", name: "Math1.Bases2", category: "Mathématiques", ects: 6 },
+  { id: "math1-calc1", name: "Math1.Calc1", category: "Mathématiques", ects: 6 },
+  { id: "math2-bases3", name: "Math2.Bases3", category: "Mathématiques", ects: 6 },
+
+  // Info : 18 UE x 6 ECTS = 108
+  { id: "info1-ds1", name: "Info1.DS1", category: "Informatique", ects: 6 },
+  { id: "info1-algo1", name: "Info1.Algo1", category: "Informatique", ects: 6 },
+  { id: "info1-bas", name: "Info1.BAS", category: "Informatique", ects: 6 },
+  { id: "info2-ds2", name: "Info2.DS2", category: "Informatique", ects: 6 },
+  { id: "info2-algo2", name: "Info2.Algo2", category: "Informatique", ects: 6 },
+  { id: "info2-ilu1", name: "Info2.ILU1", category: "Informatique", ects: 6 },
+  { id: "info2-progc", name: "Info2.progC", category: "Informatique", ects: 6 },
+  { id: "info3-bd", name: "Info3.BD", category: "Informatique", ects: 6 },
+  { id: "info3-ds3", name: "Info3.DS3", category: "Informatique", ects: 6 },
+  { id: "info3-ilu2", name: "Info3.ILU2", category: "Informatique", ects: 6 },
+  { id: "info3-algo3", name: "Info3.Algo3", category: "Informatique", ects: 6 },
+  { id: "info3-archi", name: "Info3.Archi", category: "Informatique", ects: 6 },
+  { id: "info3-sr1", name: "Info3.SR1", category: "Informatique", ects: 6 },
+  { id: "info4-ia", name: "Info4.IA", category: "Informatique", ects: 6 },
+  { id: "info4-ilu3", name: "Info4.ILU3", category: "Informatique", ects: 6 },
+  { id: "info4-projet", name: "Info4.Projet", category: "Informatique", ects: 6 },
+  { id: "info4-sr2", name: "Info4.SR2", category: "Informatique", ects: 6 },
+  { id: "info5-be", name: "Info5.BE", category: "Informatique", ects: 6 },
+
+  // Choix Info : 2 UE x 6 ECTS = 12
+  { id: "info3-is", name: "Info3.IS", category: "Choix Info", ects: 6 },
+  { id: "info5-securite", name: "Info5.Sécurité", category: "Choix Info", ects: 6 },
+  { id: "info5-parallelisme", name: "Info5.Parallélisme", category: "Choix Info", ects: 6 },
+  { id: "info4-ilu4", name: "Info4.ILU4", category: "Choix Info", ects: 6 },
+  { id: "info4-ds4", name: "Info4.DS4", category: "Choix Info", ects: 6 },
+
+  // Langues : 5 UE x 3 ECTS = 15
+  { id: "langue1", name: "Langue1", category: "Langues", ects: 3 },
+  { id: "langue2-1", name: "Langue2.1", category: "Langues", ects: 3 },
+  { id: "langue2-2", name: "Langue2.2", category: "Langues", ects: 3 },
+  { id: "langue3-1", name: "Langue3.1", category: "Langues", ects: 3 },
+  { id: "langue3-2", name: "Langue3.2", category: "Langues", ects: 3 },
+
+  // DVE : 3 ECTS
+  { id: "dve", name: "DVE", category: "Autre", ects: 3 },
+
+  // Choix libre : 18 ECTS (regroupé)
+  { id: "choix-libre", name: "Modules à choix libre", category: "Autre", ects: 18 },
+];
+
+const CURRICULUM_CATEGORIES = ["Mathématiques", "Informatique", "Choix Info", "Langues", "Autre"];
+
+const findCurriculumModule = (id) => CURRICULUM.find((m) => m.id === id);
+
 let _nid = 20;
 const newId = () => ++_nid;
-const newSubject = () => ({ id: newId(), name: "", cc1: "", cc2: "", cc3: "", cc4: "", p1: "25", p2: "25", p3: "25", p4: "25", ects: "3" });
+const newSubject = () => ({ id: newId(), name: "", cc1: "", cc2: "", cc3: "", cc4: "", p1: "25", p2: "25", p3: "25", p4: "25", ects: "3", moduleId: "" });
 const newSemester = (name) => ({ id: newId(), name: name || "", subjects: [newSubject()] });
 
 function SubjectCard({ subject, onChange, onDelete }) {
@@ -119,6 +172,15 @@ function SubjectCard({ subject, onChange, onDelete }) {
   const upd = (key, raw) => {
     const val = ["cc1","cc2","cc3","cc4"].includes(key) ? clamp(raw) : raw;
     onChange({ ...subject, [key]: val });
+  };
+  const onModuleChange = (moduleId) => {
+    const mod = findCurriculumModule(moduleId);
+    const updates = { ...subject, moduleId };
+    if (mod) {
+      if (!subject.name.trim()) updates.name = mod.name;
+      updates.ects = String(mod.ects);
+    }
+    onChange(updates);
   };
   const cols = [
     { k: "cc1", lbl: "CC1", v: subject.cc1, pk: "p1", pv: subject.p1, ap: v1, star: false },
@@ -132,6 +194,21 @@ function SubjectCard({ subject, onChange, onDelete }) {
         <input type="text" placeholder="Nom de la matière…" value={subject.name}
           onChange={(e) => upd("name", e.target.value)}
           style={{ flex: 1, minWidth: 120, background: "transparent", border: "none", borderBottom: "1.5px solid #e2e8f0", fontSize: 15, fontWeight: 500, padding: "4px 2px", outline: "none", color: "#0f172a" }} />
+        {/* Lien avec le programme officiel */}
+        <select
+          value={subject.moduleId || ""}
+          onChange={(e) => onModuleChange(e.target.value)}
+          style={{ background: subject.moduleId ? "#eef2ff" : "#f8fafc", border: "1.5px solid " + (subject.moduleId ? "#a5b4fc" : "#e2e8f0"), borderRadius: 8, color: subject.moduleId ? "#4f46e5" : "#94a3b8", fontSize: 11, fontWeight: 600, padding: "5px 6px", outline: "none", maxWidth: 130 }}
+        >
+          <option value="">Lier au programme…</option>
+          {CURRICULUM_CATEGORIES.map((cat) => (
+            <optgroup key={cat} label={cat}>
+              {CURRICULUM.filter((m) => m.category === cat).map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
         {/* ECTS input */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 8, padding: "4px 8px" }}>
           <input
@@ -256,10 +333,83 @@ function SubjectRowView({ subject }) {
   );
 }
 
+function ProgressionView({ semesters }) {
+  // Construit une map moduleId -> { avg, ects, done, name de la matière liée }
+  const progressMap = {};
+  semesters.forEach((sem) => {
+    sem.subjects.forEach((s) => {
+      if (!s.moduleId) return;
+      const avg = computeSubjectAvg(s);
+      progressMap[s.moduleId] = { avg, done: avg !== null && avg >= 10, started: avg !== null, subjectName: s.name };
+    });
+  });
+
+  const totalEcts = CURRICULUM.reduce((a, m) => a + m.ects, 0);
+  const validatedEcts = CURRICULUM.reduce((a, m) => {
+    const p = progressMap[m.id];
+    return a + (p && p.done ? m.ects : 0);
+  }, 0);
+
+  return (
+    <div>
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "16px 20px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+        <p style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 6 }}>Avancement de la licence</p>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span style={{ fontSize: 30, fontWeight: 800, color: "#4f46e5" }}>{validatedEcts}</span>
+          <span style={{ fontSize: 16, color: "#94a3b8" }}>/ {totalEcts} ECTS</span>
+        </div>
+        <div style={{ marginTop: 10, background: "#f1f5f9", borderRadius: 20, height: 8, overflow: "hidden" }}>
+          <div style={{ width: (validatedEcts / totalEcts) * 100 + "%", height: "100%", background: "linear-gradient(90deg,#34d399,#059669)", borderRadius: 20, transition: "width 0.4s ease" }} />
+        </div>
+      </div>
+
+      {CURRICULUM_CATEGORIES.map((cat) => {
+        const modules = CURRICULUM.filter((m) => m.category === cat);
+        const catEcts = modules.reduce((a, m) => a + m.ects, 0);
+        const catDone = modules.reduce((a, m) => a + (progressMap[m.id]?.done ? m.ects : 0), 0);
+        return (
+          <div key={cat} style={{ marginBottom: 22 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+              <h2 style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em" }}>{cat}</h2>
+              <span style={{ fontSize: 12, fontWeight: 700, color: catDone === catEcts ? "#059669" : "#94a3b8" }}>{catDone} / {catEcts} ECTS</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
+              {modules.map((m) => {
+                const p = progressMap[m.id];
+                const done = p?.done;
+                const started = p?.started && !done;
+                let bg = "#fff", border = "#e2e8f0", color = "#334155", icon = null;
+                if (done) { bg = "#f0fdf4"; border = "#86efac"; color = "#059669"; icon = "✓"; }
+                else if (started) { bg = "#fff1f2"; border = "#fda4af"; color = "#e11d48"; icon = "✗"; }
+                return (
+                  <div key={m.id} style={{ background: bg, border: "1.5px solid " + border, borderRadius: 12, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color }}>{m.name}</span>
+                      {icon && <span style={{ fontSize: 13, color }}>{icon}</span>}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 10, color: "#94a3b8" }}>{m.ects} ECTS</span>
+                      {p?.started && <span style={{ fontSize: 11, fontWeight: 700, color }}>{fmt(p.avg)}/20</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 8, lineHeight: 1.6 }}>
+        💡 Pour faire apparaître une matière ici, lie-la au programme via le menu déroulant "Lier au programme…" en mode édition.
+      </p>
+    </div>
+  );
+}
+
 export default function App() {
   const [semesters, setSemesters] = useState([newSemester("Semestre 1")]);
   const [activeId, setActiveId] = useState(null);
   const [editing, setEditing] = useState(false);
+  const [view, setView] = useState("semester"); // "semester" | "progression"
   const [newSemName, setNewSemName] = useState("");
   const [showAddSem, setShowAddSem] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -456,9 +606,25 @@ export default function App() {
         </div>
       </div>
 
+      {/* Onglets vue : Semestre / Progression */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "10px 16px", display: "flex", gap: 8 }}>
+        <button onClick={() => setView("semester")}
+          style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1.5px solid " + (view === "semester" ? "#4f46e5" : "#e2e8f0"), background: view === "semester" ? "#eef2ff" : "#fff", color: view === "semester" ? "#4f46e5" : "#94a3b8", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+          📊 Semestre
+        </button>
+        <button onClick={() => { setView("progression"); setEditing(false); }}
+          style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1.5px solid " + (view === "progression" ? "#4f46e5" : "#e2e8f0"), background: view === "progression" ? "#eef2ff" : "#fff", color: view === "progression" ? "#4f46e5" : "#94a3b8", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+          🎓 Progression
+        </button>
+      </div>
+
       {/* Contenu */}
       <div style={{ padding: "20px 16px 100px", maxWidth: 860, margin: "0 auto" }}>
 
+        {view === "progression" && <ProgressionView semesters={semesters} />}
+
+        {view === "semester" && (
+        <>
         {/* Bouton flottant */}
         <button onClick={() => setEditing((e) => !e)}
           style={{ position: "fixed", bottom: 28, right: 20, width: 52, height: 52, borderRadius: "50%", background: editing ? "linear-gradient(135deg,#0f172a,#1e293b)" : "linear-gradient(135deg,#4f46e5,#7c3aed)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", boxShadow: "0 6px 20px rgba(79,70,229,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
@@ -562,6 +728,8 @@ export default function App() {
               + Ajouter une matière
             </button>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
