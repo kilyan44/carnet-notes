@@ -1,29 +1,22 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 
-const SUPABASE_URL = "https://bjdnxygflefkbblalzsr.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqZG54eWdmbGVma2JibGFsenNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MDE3OTEsImV4cCI6MjA5NjQ3Nzc5MX0.QDWD2CXNCKHF4IkNS3AyDOS8FMr0gNjDs0rDDABCRYw";
-
-async function loadFromSupabase() {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&limit=1`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY },
-  });
-  const rows = await res.json();
-  if (rows && rows.length > 0 && rows[0].data && rows[0].data.semesters) {
-    return rows[0].data;
+async function loadNotes() {
+  const res = await fetch("/api/notes");
+  if (!res.ok) throw new Error("Erreur de chargement");
+  const data = await res.json();
+  if (data && data.semesters) {
+    return data;
   }
   return null;
 }
 
-async function saveToSupabase(data) {
-  await fetch(`${SUPABASE_URL}/rest/v1/notes?id=not.is.null`, {
-    method: "PATCH",
+async function saveNotes(data) {
+  await fetch("/api/notes", {
+    method: "POST",
     headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: "Bearer " + SUPABASE_KEY,
       "Content-Type": "application/json",
-      Prefer: "return=minimal",
     },
-    body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
+    body: JSON.stringify(data),
   });
 }
 
@@ -537,7 +530,7 @@ export default function App() {
   const saveTimer = useRef(null);
 
   useEffect(() => {
-    loadFromSupabase().then((data) => {
+    loadNotes().then((data) => {
       if (data && data.semesters && data.semesters.length > 0) {
         setSemesters(data.semesters);
         setActiveId(data.semesters[0].id);
@@ -559,7 +552,7 @@ export default function App() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaving(true);
     saveTimer.current = setTimeout(async () => {
-      await saveToSupabase({ semesters: newSemesters });
+      await saveNotes({ semesters: newSemesters });
       setSaving(false);
       setLastSaved(new Date());
     }, 1500);
