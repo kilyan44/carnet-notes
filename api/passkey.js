@@ -27,7 +27,7 @@ function hasSession(req) {
   const item = (req.headers.cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith(COOKIE + '='));
   if (!item) return false;
   const [expiresAt, signature] = item.slice(COOKIE.length + 1).split('.');
-  return !!expiresAt && !!signature && /^\\d+$/.test(expiresAt) &&
+  return !!expiresAt && !!signature && /^\d+$/.test(expiresAt) &&
     Number(expiresAt) >= Date.now() && safeEqual(signature, signSession(expiresAt));
 }
 function setSession(res) {
