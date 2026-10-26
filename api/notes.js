@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
       const expiresAt = Date.now() + SESSION_MAX_AGE * 1000;
       const signature = signSession(expiresAt);
-      res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${expiresAt}.${signature}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_MAX_AGE}`);
+      res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${expiresAt}.${signature}; HttpOnly; Secure; SameSite=Strict; Path=/`);
       return res.status(200).json({ success: true });
     }
 
