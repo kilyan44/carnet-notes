@@ -533,11 +533,14 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [authVersion, setAuthVersion] = useState(0);
+  const [passkeyAvailable, setPasskeyAvailable] = useState(false);
+  const [passkeyMessage, setPasskeyMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const saveTimer = useRef(null);
 
   useEffect(() => {
+    fetch("/api/passkey").then((r) => r.ok ? r.json() : { available: false }).then((d) => setPasskeyAvailable(!!d.available)).catch(() => {});
     setLoading(true);
     loadNotes().then((data) => {
       if (data && data.semesters && data.semesters.length > 0) {
@@ -638,6 +641,38 @@ export default function App() {
   const totalEctsValidated = computeTotalEcts(semesters);
   const totalEctsInscrit = computeTotalEctsInscrit(semesters);
 
+  const handlePasskeyLogin = async () => {
+    setLoginError("");
+    try {
+      const { startAuthentication } = await import("@simplewebauthn/browser");
+      const optionsResponse = await fetch("/api/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "auth-options" }) });
+      const options = await optionsResponse.json();
+      if (!optionsResponse.ok) throw new Error(options.error || "Empreinte indisponible.");
+      const response = await startAuthentication({ optionsJSON: options });
+      const verify = await fetch("/api/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ action: "auth-verify", response }) });
+      const result = await verify.json();
+      if (!verify.ok) throw new Error(result.error || "Vérification impossible.");
+      setLoading(true);
+      setAuthVersion((version) => version + 1);
+    } catch (error) { setLoginError(error.message || "Empreinte annulée ou indisponible."); }
+  };
+
+  const handleRegisterPasskey = async () => {
+    setPasskeyMessage("");
+    try {
+      const { startRegistration } = await import("@simplewebauthn/browser");
+      const optionsResponse = await fetch("/api/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ action: "register-options" }) });
+      const options = await optionsResponse.json();
+      if (!optionsResponse.ok) throw new Error(options.error || "Impossible de préparer l'empreinte.");
+      const response = await startRegistration({ optionsJSON: options });
+      const verify = await fetch("/api/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ action: "register-verify", response }) });
+      const result = await verify.json();
+      if (!verify.ok) throw new Error(result.error || "Enregistrement impossible.");
+      setPasskeyAvailable(true);
+      setPasskeyMessage("Empreinte enregistrée ! Tu pourras l'utiliser pour te connecter.");
+    } catch (error) { setPasskeyMessage(error.message || "Enregistrement annulé ou indisponible."); }
+  };
+
   const handleLogin = async (event) => {
     event.preventDefault();
     setLoginError("");
@@ -688,6 +723,9 @@ export default function App() {
           />
           {loginError && <p role="alert" style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{loginError}</p>}
           <button type="submit" style={{ width: "100%", padding: 13, border: 0, borderRadius: 10, background: "#4338ca", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Déverrouiller</button>
+          {passkeyAvailable && (
+            <button type="button" onClick={handlePasskeyLogin} style={{ width: "100%", padding: 13, marginTop: 10, border: "1px solid #c7d2fe", borderRadius: 10, background: "#eef2ff", color: "#3730a3", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>👆 Déverrouiller avec mon empreinte</button>
+          )}
         </form>
       </div>
     );
@@ -715,6 +753,8 @@ export default function App() {
             </span>}
             {!saving && lastSaved && <span style={{ color: "#6ee7b7" }}>✓ Sauvegardé</span>}
           </p>
+          <button onClick={handleRegisterPasskey} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>👆 {passkeyAvailable ? "Réenregistrer mon empreinte" : "Activer l'accès par empreinte"}</button>
+          {passkeyMessage && <p role="status" style={{ color: "#c7d2fe", fontSize: 12, marginTop: 6, maxWidth: 320 }}>{passkeyMessage}</p>}
         </div>
 
         {/* Stats header droite */}
