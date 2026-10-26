@@ -33,7 +33,7 @@ function hasValidSession(req) {
 
   const value = item.slice(SESSION_COOKIE.length + 1);
   const [expiresAt, signature] = value.split('.');
-  if (!expiresAt || !signature || !/^\\d+$/.test(expiresAt)) return false;
+  if (!expiresAt || !signature || !Number.isSafeInteger(Number(expiresAt)) || String(Number(expiresAt)) !== expiresAt) return false;
   if (Number(expiresAt) < Date.now()) return false;
 
   return safeEqual(signature, signSession(expiresAt));
