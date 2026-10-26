@@ -33,7 +33,7 @@ function hasSession(req) {
 function setSession(res) {
   const expiresAt = Date.now() + MAX_AGE * 1000;
   const signature = signSession(expiresAt);
-  res.setHeader('Set-Cookie', `${COOKIE}=${expiresAt}.${signature}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${MAX_AGE}`);
+  res.setHeader('Set-Cookie', `${COOKIE}=${expiresAt}.${signature}; HttpOnly; Secure; SameSite=Strict; Path=/`);
 }
 function getHost(req) {
   return (req.headers.host || '').split(':')[0].toLowerCase();
