@@ -1,8 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 
 async function loadNotes() {
-  const res = await fetch("/api/notes");
-  if (!res.ok) throw new Error("Erreur de chargement");
+  const res = await fetch("/api/notes", { credentials: "same-origin" });
+  if (!res.ok) {
+    const error = new Error(res.status === 401 ? "Authentification requise" : "Erreur de chargement");
+    error.status = res.status;
+    throw error;
+  }
   const data = await res.json();
   if (data && data.semesters) {
     return data;
@@ -11,13 +15,13 @@ async function loadNotes() {
 }
 
 async function saveNotes(data) {
-  await fetch("/api/notes", {
+  const res = await fetch("/api/notes", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify(data),
   });
+  if (!res.ok) throw new Error("Impossible d'enregistrer les notes");
 }
 
 function clamp(val) {
@@ -525,11 +529,16 @@ export default function App() {
   const [showAddSem, setShowAddSem] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [authVersion, setAuthVersion] = useState(0);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const saveTimer = useRef(null);
 
   useEffect(() => {
+    setLoading(true);
     loadNotes().then((data) => {
       if (data && data.semesters && data.semesters.length > 0) {
         setSemesters(data.semesters);
@@ -544,9 +553,15 @@ export default function App() {
         setSemesters([s]);
         setActiveId(s.id);
       }
+      setAuthenticated(true);
+      setLoginError("");
       setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
+    }).catch((error) => {
+      setAuthenticated(false);
+      if (error.status !== 401) setLoginError("Impossible de charger les notes. Réessaie dans un instant.");
+      setLoading(false);
+    });
+  }, [authVersion]);
 
   const scheduleSave = useCallback((newSemesters) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -623,12 +638,57 @@ export default function App() {
   const totalEctsValidated = computeTotalEcts(semesters);
   const totalEctsInscrit = computeTotalEctsInscrit(semesters);
 
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setLoginError("");
+    try {
+      const response = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action: "login", password }),
+      });
+      if (!response.ok) {
+        setLoginError(response.status === 401 ? "Mot de passe incorrect." : "Connexion impossible. Réessaie.");
+        return;
+      }
+      setPassword("");
+      setLoading(true);
+      setAuthVersion((version) => version + 1);
+    } catch {
+      setLoginError("Connexion impossible. Vérifie ta connexion internet.");
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
         <div style={{ width: 48, height: 48, border: "4px solid #e2e8f0", borderTop: "4px solid #4f46e5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
         <p style={{ color: "#94a3b8", fontSize: 14 }}>Chargement des notes…</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #eef2ff, #f8fafc)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+        <form onSubmit={handleLogin} style={{ width: "100%", maxWidth: 360, background: "#fff", padding: 28, borderRadius: 20, boxShadow: "0 12px 40px rgba(30,27,75,0.12)", border: "1px solid #e2e8f0" }}>
+          <div style={{ fontSize: 34, textAlign: "center", marginBottom: 12 }}>🔒</div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1e1b4b", textAlign: "center" }}>Carnet de Notes</h1>
+          <p style={{ fontSize: 14, color: "#64748b", textAlign: "center", marginTop: 8, marginBottom: 22 }}>Entre ton mot de passe pour accéder à tes notes.</p>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            placeholder="Mot de passe"
+            required
+            style={{ width: "100%", padding: "13px 14px", border: "1px solid #cbd5e1", borderRadius: 10, fontSize: 16, outlineColor: "#6366f1", marginBottom: 12 }}
+          />
+          {loginError && <p role="alert" style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{loginError}</p>}
+          <button type="submit" style={{ width: "100%", padding: 13, border: 0, borderRadius: 10, background: "#4338ca", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Déverrouiller</button>
+        </form>
       </div>
     );
   }
